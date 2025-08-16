@@ -1,18 +1,13 @@
--- KRNL Avatar Changer 2.0 Ultra C00LKIDD
+-- KRNL Avatar Changer – HumanoidDescription Edition
 local Players = game:GetService("Players")
 local player = Players.LocalPlayer
-local HttpService = game:GetService("HttpService")
-local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
 
--- === AUTO USERID ===
-local userId = player.UserId
-
--- === GUI SETUP ===
+-- === GUI ===
 local ScreenGui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
 ScreenGui.Name = "AvatarChangerGUI"
 
--- Toggle Button
 local ToggleButton = Instance.new("TextButton", ScreenGui)
 ToggleButton.Size = UDim2.new(0,150,0,40)
 ToggleButton.Position = UDim2.new(0,20,0,20)
@@ -21,12 +16,10 @@ ToggleButton.TextColor3 = Color3.fromRGB(255,255,255)
 ToggleButton.Text = "Avatar Changer"
 ToggleButton.BorderSizePixel = 0
 
--- Main Frame
 local Frame = Instance.new("Frame", ScreenGui)
-Frame.Size = UDim2.new(0, 300, 0, 500)
-Frame.Position = UDim2.new(0, 20, 0, 70)
+Frame.Size = UDim2.new(0,300,0,500)
+Frame.Position = UDim2.new(0,20,0,70)
 Frame.BackgroundColor3 = Color3.fromRGB(30,0,0)
-Frame.BorderSizePixel = 0
 Frame.Visible = false
 
 -- Draggable
@@ -50,43 +43,24 @@ UserInputService.InputChanged:Connect(function(input)
 		Frame.Position = UDim2.new(framePos.X.Scale, framePos.X.Offset + delta.X, framePos.Y.Scale, framePos.Y.Offset + delta.Y)
 	end
 end)
-ToggleButton.MouseButton1Click:Connect(function()
-	Frame.Visible = not Frame.Visible
-end)
+ToggleButton.MouseButton1Click:Connect(function() Frame.Visible = not Frame.Visible end)
 
 -- Layout
 local UIListLayout = Instance.new("UIListLayout", Frame)
 UIListLayout.Padding = UDim.new(0,10)
-UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
 
--- Search Bar
-local SearchBox = Instance.new("TextBox", Frame)
-SearchBox.Size = UDim2.new(1, -10, 0, 30)
-SearchBox.Position = UDim2.new(0,5,0,5)
-SearchBox.BackgroundColor3 = Color3.fromRGB(50,0,0)
-SearchBox.TextColor3 = Color3.fromRGB(255,255,255)
-SearchBox.PlaceholderText = "Search outfits..."
-SearchBox.ClearTextOnFocus = false
+-- === Store "saved outfits" locally ===
+local savedOutfits = {}
 
--- === FETCH SAVED OUTFITS VIA ROBLOX API ===
-local function fetchSavedOutfits()
-	local url = "https://avatar.roblox.com/v1/users/"..userId.."/outfits"
-	local success, response = pcall(function()
-		return HttpService:GetAsync(url, true)
-	end)
-	if success then
-		local data = HttpService:JSONDecode(response)
-		return data.data or {}
-	else
-		warn("Failed to fetch outfits")
-		return {}
-	end
+-- Add current avatar as first outfit
+local function addCurrentAvatarAsOutfit(name)
+	local desc = Players:GetHumanoidDescriptionFromUserId(player.UserId)
+	table.insert(savedOutfits, {name = name or "Current Avatar", desc = desc})
 end
 
-local outfits = fetchSavedOutfits()
-local buttons = {}
+addCurrentAvatarAsOutfit("My Current Avatar") -- start with one
 
--- === CREATE BUTTONS + PREVIEWS ===
+-- Create outfit buttons with previews
 local function createOutfitButton(outfit)
 	local buttonFrame = Instance.new("Frame", Frame)
 	buttonFrame.Size = UDim2.new(1, -10, 0, 100)
@@ -99,11 +73,11 @@ local function createOutfitButton(outfit)
 	button.BackgroundColor3 = Color3.fromRGB(150,0,0)
 	button.BorderSizePixel = 0
 	button.TextColor3 = Color3.fromRGB(255,255,255)
-	button.Text = outfit.name or "Outfit"
+	button.Text = outfit.name
 
 	local viewport = Instance.new("ViewportFrame", buttonFrame)
 	viewport.Size = UDim2.new(0.35, -10, 1, -10)
-	viewport.Position = UDim2.new(0.65, 5, 0, 5)
+	viewport.Position = UDim2.new(0.65,5,0,5)
 	viewport.BackgroundColor3 = Color3.fromRGB(0,0,0)
 	viewport.BorderSizePixel = 0
 
@@ -116,48 +90,26 @@ local function createOutfitButton(outfit)
 	hrp.Anchored = true
 	hrp.Parent = dummy
 
-	-- Apply outfit
+	-- Apply HumanoidDescription
 	pcall(function()
-		local desc = Players:GetHumanoidDescriptionFromUserId(userId)
-		desc:ApplyTo(dummy)
+		outfit.desc:ApplyTo(dummy)
 	end)
 
-	-- Camera
 	local cam = Instance.new("Camera")
 	cam.CFrame = CFrame.new(Vector3.new(0,2,5), Vector3.new(0,2,0))
 	viewport.CurrentCamera = cam
 
-	-- Swap on click
+	-- Swap outfit on click
 	button.MouseButton1Click:Connect(function()
-		local desc = Players:GetHumanoidDescriptionFromUserId(userId)
-		desc:ApplyTo(player)
+		outfit.desc:ApplyTo(player)
 	end)
-
-	-- Hover animation (simple up/down)
-	buttonFrame.MouseEnter:Connect(function()
-		RunService:BindToRenderStep("HoverAnim"..outfit.id, Enum.RenderPriority.Camera.Value, function()
-			hrp.CFrame = hrp.CFrame * CFrame.new(0, 0.02*math.sin(tick()*10), 0)
-		end)
-	end)
-	buttonFrame.MouseLeave:Connect(function()
-		RunService:UnbindFromRenderStep("HoverAnim"..outfit.id)
-	end)
-
-	table.insert(buttons, {frame = buttonFrame, outfit = outfit})
 end
 
-for _, outfit in ipairs(outfits) do
+-- Render all saved outfits
+for _, outfit in ipairs(savedOutfits) do
 	createOutfitButton(outfit)
 end
 
--- === SEARCH FILTER ===
-SearchBox:GetPropertyChangedSignal("Text"):Connect(function()
-	local query = SearchBox.Text:lower()
-	for _, btn in ipairs(buttons) do
-		if btn.outfit.name:lower():find(query) then
-			btn.frame.Visible = true
-		else
-			btn.frame.Visible = false
-		end
-	end
-end)
+-- Add new outfit mid-game example (just a test)
+-- addCurrentAvatarAsOutfit("New Outfit Name")
+-- createOutfitButton(savedOutfits[#savedOutfits])
